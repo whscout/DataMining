@@ -95,6 +95,9 @@ class DENCLUE(BaseEstimator, ClusterMixin):
         for i in range(self.n_samples):
             density_attractors[i], density[i], radii[i] = _hill_climb(X[i], X, W=sample_weight,h=self.h, eps=self.eps)
 
+        densitys = np.zeros(self.n_samples)
+        for i in range(data.shape[0]):
+            densitys[i] = obj.get_density(x=data[i], X=data)
 
         cluster_info = {}
         num_clusters = 0
@@ -102,17 +105,16 @@ class DENCLUE(BaseEstimator, ClusterMixin):
                                       'centroid': np.atleast_2d(density_attractors[0])}
         g_clusters = nx.Graph()
         for j1 in range(self.n_samples):
-            g_clusters.add_node(j1, attr_dict={'attractor': density_attractors[j1], 'radius': radii[j1], 'density': density[j1]})
+            g_clusters.add_node(j1, attr_dict={'attractor': density_attractors[j1], 'radius': radii[j1], 'density': densitys[j1]})
 
 
-        g_cluster = nx.get_node_attributes(g_clusters,'attr_dict')
         for j1 in range(self.n_samples):
             for j2 in (x for x in range(self.n_samples) if x != j1):
 
                 if g_clusters.has_edge(j1, j2):
                     continue
-                diff = np.linalg.norm(g_cluster[j1]['attractor'] - g_cluster[j2]['attractor'])
-                if diff <= (g_cluster[j1]['radius'] + g_cluster[j1]['radius']):
+                diff = np.linalg.norm(g_clusters.node[j1]['attr_dict']['attractor'] - g_clusters.node[j2]['attr_dict']['attractor'])
+                if diff <= (g_clusters.node[j1]['attr_dict']['radius'] + g_clusters.node[j1]['attr_dict']['radius']):
                     g_clusters.add_edge(j1, j2)
 
 
@@ -123,9 +125,9 @@ class DENCLUE(BaseEstimator, ClusterMixin):
         for clust in clusters:
 
 
-            max_instance = max(clust, key=lambda x: g_cluster[x]['density'])
-            max_density = g_cluster[max_instance]['density']
-            max_centroid = g_cluster[max_instance]['attractor']
+            max_instance = max(clust, key=lambda x: clust.node[x]['attr_dict']['density'])
+            max_density = clust.node[max_instance]['attr_dict']['density']
+            max_centroid = clust.node[max_instance]['attr_dict']['attractor']
 
 
             complete = False
@@ -145,7 +147,8 @@ class DENCLUE(BaseEstimator, ClusterMixin):
 
         self.clust_info_ = cluster_info
         self.labels_ = labels
-
+        nx.draw(g_clusters)
+        plt.show()
         return self
 
     def get_density(self, x, X, y=None, sample_weight=None):
@@ -163,22 +166,12 @@ class DENCLUE(BaseEstimator, ClusterMixin):
         density = superweight / np.sum(sample_weight)
         return density
 
-    def set_minimum_density(self, min_density):
-        self.min_density = min_density
-        labels_copy = np.copy(self.labels_)
-        for k in self.clust_info_.keys():
-            if self.clust_info_[k]['density'] < min_density:
-                labels_copy[self.clust_info_[k]['instances']] = -1
-            else:
-                labels_copy[self.clust_info_[k]['instances']] = k
-        self.labels_ = labels_copy
-        return self
 
+obj = DENCLUE(h=0.1, eps=0.0001, min_density=2.85)
 
-
-obj = DENCLUE()
 obj.fit(data)
-obj.set_minimum_density(0.0001)
-obj.get_density(10,data)
+
+
+
 
 
